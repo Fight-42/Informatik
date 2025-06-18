@@ -1,39 +1,48 @@
-class BallController extends Sprite {
+public class BallController extends Sprite {
    BallModel model;
    Schläger schläger;
    BlockModel blockModel;
    BlockView blockView;
-   Schläger breite;
+   GameController spiel; // Referenz auf GameController für Ball-Liste
    static boolean itemActive = false;
 
-   BallController(BallModel model, Schläger schläger, BlockModel blockModel, BlockView blockView) {
+   public BallController(BallModel model, Schläger schläger, BlockModel blockModel, BlockView blockView, GameController spiel) {
       super(390, 500, SpriteLibrary.Sleepy_Blocks, 7);
       setScale(0.3);
       this.model = model;
       this.schläger = schläger;
       this.blockModel = blockModel;
       this.blockView = blockView;
+      this.spiel = spiel;
    }
 
+    // PowerUp-Handler, ruft ggf. Multi-Ball auf
    public void addEffect(int type) {
       BallController.itemActive = true;
+      Sound.playSound(Sound.short_bell);
       if(type == 1) {
          addAdditionalBall();
-      }
-      else if(type == 2) {
+      } else if(type == 2) {
          makeBatLarger();
          schläger.setFillColor(Color.lime);
-      }
-      else if(type == 3) {
+      } else if(type == 3) {
          makeBatSmaller();
          schläger.setFillColor(Color.orangered);
       }
       println("Effekt aktiviert. Typ = " + type, Color.lime);
    }
 
+    // Erzeugt einen zweiten Ball an der aktuellen Ballposition
    public void addAdditionalBall() {
       BallController.itemActive = false;
       schläger.setFillColor(Color.white);
+
+      BallModel neuesModel = new BallModel();
+      neuesModel.setzeGeschwindigkeit(model.v); // gleiche Geschwindigkeit, verschiedene Richtung
+      BallController neuerBall = new BallController(neuesModel, schläger, blockModel, blockView, spiel);
+      neuerBall.moveTo(this.getCenterX() + 10, this.getCenterY() + 10); // leichte Versetzung
+
+      spiel.addBall(neuerBall);
    }
 
    public void makeBatLarger() {
@@ -57,27 +66,28 @@ class BallController extends Sprite {
       if(y < getWidth() / 2) model.vy *= -1;
       if(x > 800 - getWidth() / 2 || x < getWidth() / 2) model.vx *= -1;
       if(y > 600 - getHeight() / 2) {
-         Text title = new Text(400, 200, 100, "Game Over");
-         title.setAlignment(Alignment.center);
-         title.setFillColor(Color.orangered, 1);
-         title.setBorderColor(Color.black);
-         title.setStyle(true, false);
-         title.setBorderWidth(7);
+            // Ball aus dem Feld: Ball zerstören
          destroy();
-         System.exit(0);
+         return;
       }
 
       if(collidesWith(schläger)) {
-         double schlaegerXcorner = schläger.getCenterX() - 0.5 * schläger.getWidth(); //0.5 * breite
-         double relativeX = (getCenterX() - schlaegerXcorner) / schläger.getWidth();  // aufteilen in Einheiten, die entsprechenden Winkel bekommen 
-         double winkel = (relativeX - 0.5) * 150; // -75 bis +75 Grad
+         double schlaegerXcorner = schläger.getCenterX() - 0.5 * schläger.getWidth();
+         double relativeX = (getCenterX() - schlaegerXcorner) / schläger.getWidth();
+         double winkel = (relativeX - 0.5) * 150;
          double speed = Math.sqrt(model.vx * model.vx + model.vy * model.vy);
          double rad = Math.toRadians(winkel);
          model.vx = speed * Math.sin(rad);
          model.vy = -speed * Math.cos(rad);
          model.v += 0.05;
-         
-         println("relativeX: " + Math.round(relativeX) + ", winkel: " + Math.round(winkel));  //Test-ausgabe
+         if(winkel > 0) {
+            Sound.playSound(Sound.pong_f);
+         }
+         else{
+            Sound.playSound(Sound.pong_d);
+         }
+
+         println("relativeX: " + Math.round(relativeX) + ", winkel: " + Math.round(winkel));
       }
 
       int gridX = (int)(x / blockView.multiplierZ);
@@ -87,6 +97,7 @@ class BallController extends Sprite {
          if(blockModel.getBlockArt(gridX, gridY) != 0) {
             if(blockModel.getBlockArt(gridX, gridY) != 5) {
                blockModel.zerstöreBlock(gridX, gridY);
+               Sound.playSound(Sound.boulder);
                blockView.zeichneBlöcke();
             }
             model.vy *= -1;
@@ -103,13 +114,11 @@ class BallController extends Sprite {
                destroy();
                System.exit(0);
             }
-         }
-         else if(blockModel.getBlockItem(gridX, gridY).getTyp() != 0 && BallController.itemActive == false) {
+         } else if(blockModel.getBlockItem(gridX, gridY).getTyp() != 0 && BallController.itemActive == false) {
             int itemType = blockModel.getBlockItem(gridX, gridY).getTyp();
             blockModel.getBlockItem(gridX, gridY).zerstören();
             blockView.zeichneBlöcke();
             addEffect(itemType);
-            
          }
       }
 
