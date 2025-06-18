@@ -3,7 +3,7 @@ public class BallController extends Sprite {
    Schläger schläger;
    BlockModel blockModel;
    BlockView blockView;
-   GameController spiel; // Referenz auf GameController für Ball-Liste
+   GameController spiel;
    static boolean itemActive = false;
 
    public BallController(BallModel model, Schläger schläger, BlockModel blockModel, BlockView blockView, GameController spiel) {
@@ -16,7 +16,6 @@ public class BallController extends Sprite {
       this.spiel = spiel;
    }
 
-    // PowerUp-Handler, ruft ggf. Multi-Ball auf
    public void addEffect(int type) {
       BallController.itemActive = true;
       Sound.playSound(Sound.short_bell);
@@ -32,15 +31,14 @@ public class BallController extends Sprite {
       println("Effekt aktiviert. Typ = " + type, Color.lime);
    }
 
-    // Erzeugt einen zweiten Ball an der aktuellen Ballposition
    public void addAdditionalBall() {
       BallController.itemActive = false;
       schläger.setFillColor(Color.white);
 
       BallModel neuesModel = new BallModel();
-      neuesModel.setzeGeschwindigkeit(model.v); // gleiche Geschwindigkeit, verschiedene Richtung
+      neuesModel.setzeGeschwindigkeit(model.v);
       BallController neuerBall = new BallController(neuesModel, schläger, blockModel, blockView, spiel);
-      neuerBall.moveTo(this.getCenterX() + 10, this.getCenterY() + 10); // leichte Versetzung
+      neuerBall.moveTo(this.getCenterX() + 10, this.getCenterY() + 10);
 
       spiel.addBall(neuerBall);
    }
@@ -60,18 +58,45 @@ public class BallController extends Sprite {
    public void act() {
       if(isDestroyed()) return;
 
-      double x = getCenterX();
-      double y = getCenterY();
+      lookAheadAndMove();
 
-      if(y < getWidth() / 2) model.vy *= -1;
-      if(x > 800 - getWidth() / 2 || x < getWidth() / 2) model.vx *= -1;
-      if(y > 600 - getHeight() / 2) {
-            // Ball aus dem Feld: Ball zerstören
+      if(getCenterY() > 600 - getHeight() / 2) {
          destroy();
          return;
       }
+   }
+   
+   private void lookAheadAndMove() {
+      double nextX = getCenterX() + model.vx;
+      double nextY = getCenterY() + model.vy;
 
-      if(collidesWith(schläger)) {
+      boolean xKollidiert = checkBlockCollision(nextX, getCenterY());
+      boolean yKollidiert = checkBlockCollision(getCenterX(), nextY);
+
+      // Seitenrand prüfen (x)
+      if(nextX <= getWidth() / 2 || nextX >= 800 - getWidth() / 2) {
+         model.vx *= -1;
+         nextX = getCenterX(); // Ball bleibt auf gleicher x-Position
+      }
+      // Oberer Rand prüfen (y)
+      if(nextY <= getHeight() / 2) {
+         model.vy *= -1;
+         nextY = getCenterY(); // Ball bleibt auf gleicher y-Position
+      }
+
+      // Blockkollision – X-Richtung
+      if(xKollidiert) {
+         model.vx *= -1;
+         Sound.playSound(Sound.boulder);
+      }
+      // Blockkollision – Y-Richtung
+      if(yKollidiert) {
+         model.vy *= -1;
+         Sound.playSound(Sound.boulder);
+      }
+
+      // Schläger-Kollision
+      if(collidesWithSchlaeger(nextX, nextY)) {
          double schlaegerXcorner = schläger.getCenterX() - 0.5 * schläger.getWidth();
          double relativeX = (getCenterX() - schlaegerXcorner) / schläger.getWidth();
          double winkel = (relativeX - 0.5) * 150;
@@ -80,41 +105,16 @@ public class BallController extends Sprite {
          model.vx = speed * Math.sin(rad);
          model.vy = -speed * Math.cos(rad);
          model.v += 0.05;
-         if(winkel > 0) {
-            Sound.playSound(Sound.pong_f);
-         }
-         else{
-            Sound.playSound(Sound.pong_d);
-         }
-
+         if(winkel > 0) Sound.playSound(Sound.pong_f);
+         else Sound.playSound(Sound.pong_d);
          println("relativeX: " + Math.round(relativeX) + ", winkel: " + Math.round(winkel));
       }
 
-      int gridX = (int)(x / blockView.multiplierZ);
-      int gridY = (int)(y / blockView.multiplierS);
-
+      // PowerUp/BlockItem prüfen
+      int gridX = (int)(getCenterX() / blockView.multiplierZ);
+      int gridY = (int)(getCenterY() / blockView.multiplierS);
       if(gridX >= 0 && gridX < blockModel.cols && gridY >= 0 && gridY < blockModel.rows) {
-         if(blockModel.getBlockArt(gridX, gridY) != 0) {
-            if(blockModel.getBlockArt(gridX, gridY) != 5) {
-               blockModel.zerstöreBlock(gridX, gridY);
-               Sound.playSound(Sound.boulder);
-               blockView.zeichneBlöcke();
-            }
-            model.vy *= -1;
-
-            println("Noch vorhandene Blöcke: " + blockModel.zaehleBlöcke());
-
-            if(blockModel.sindAlleBlöckeZerstört()) {
-               Text title = new Text(400, 200, 100, "You won!");
-               title.setAlignment(Alignment.center);
-               title.setFillColor(Color.greenyellow, 1);
-               title.setBorderColor(Color.black);
-               title.setBorderWidth(7);
-               title.setStyle(true, false);
-               destroy();
-               System.exit(0);
-            }
-         } else if(blockModel.getBlockItem(gridX, gridY).getTyp() != 0 && BallController.itemActive == false) {
+         if(blockModel.getBlockItem(gridX, gridY).getTyp() != 0 && BallController.itemActive == false) {
             int itemType = blockModel.getBlockItem(gridX, gridY).getTyp();
             blockModel.getBlockItem(gridX, gridY).zerstören();
             blockView.zeichneBlöcke();
@@ -124,8 +124,48 @@ public class BallController extends Sprite {
 
       move(model.vx, model.vy);
    }
+
+   // Prüft, ob an der Position (px, py) eine Blockkollision stattfindet,
+   // zerstört ggf. den Block (außer Blockart 5), gibt true zurück falls Block
+   private boolean checkBlockCollision(double px, double py) {
+      int gridX = (int)(px / blockView.multiplierZ);
+      int gridY = (int)(py / blockView.multiplierS);
+
+      if(gridX >= 0 && gridX < blockModel.cols && gridY >= 0 && gridY < blockModel.rows) {
+         if(blockModel.getBlockArt(gridX, gridY) != 0) {
+            if(blockModel.getBlockArt(gridX, gridY) != 5) {
+               blockModel.zerstöreBlock(gridX, gridY);
+               blockView.zeichneBlöcke();
+            }
+            println("Noch vorhandene Blöcke: " + blockModel.zaehleBlöcke());
+            if(blockModel.sindAlleBlöckeZerstört()) {
+               Text title = new Text(400, 200, 100, "You won!");
+               title.setAlignment(Alignment.center);
+               title.setFillColor(Color.greenyellow, 1);
+               title.setBorderColor(Color.black);
+               title.setBorderWidth(7);
+               title.setStyle(true, false);
+               setImage(SpriteLibrary.Ballskin, 0);
+               System.exit(0);
+            }
+            return true;
+         }
+      }
+      return false;
+   }
+
+   private boolean collidesWithSchlaeger(double nx, double ny) {
+      // Temporär Ball an neue Position setzen und mit Schläger prüfen
+      double oldX = getCenterX();
+      double oldY = getCenterY();
+      moveTo(nx, ny);
+      boolean collides = collidesWith(schläger);
+      moveTo(oldX, oldY); // zurücksetzen
+      return collides;
+   }
 }
 
+// --- Rest unverändert ---
 class Schläger extends Rectangle {
    String links, rechts;
    double dy = 20;
@@ -169,10 +209,10 @@ class MakeBatNormal implements Runnable {
       this.bat = bat;
    }
 
-  	public void run() {
+   public void run() {
       this.bat.makeNormal();
       BallController.itemActive = false;
       bat.setFillColor(Color.white);
       println("Effekt abgelaufen.", Color.red);
-  	}
+   }
 }
