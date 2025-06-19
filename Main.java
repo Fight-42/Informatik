@@ -42,4 +42,5 @@ public class GameController extends Actor {
       bälle.add(neuerBall);
    }
 }
+new World(800,680);
 new GameController(); 
