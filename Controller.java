@@ -60,7 +60,7 @@ public class BallController extends Sprite {
 
       lookAheadAndMove();
 
-      if(getCenterY() > 600 - getHeight() / 2) {
+      if(getCenterY() > 680 - getHeight() / 2) {
          destroy();
          return;
       }
