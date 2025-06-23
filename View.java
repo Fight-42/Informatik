@@ -33,7 +33,7 @@ class BlockView extends Actor {
                allBlocks.add(abgerundeterBlock);
             } else if(typ == 0) {
                if(model.getBlockItem(x, y).getTyp() > 0) {
-                  Sprite itemNeu = new Sprite((x * multiplierZ + blockGap / 2.0) + (multiplierZ / 2.0),(y * multiplierS + blockGap / 2.0) + (multiplierS / 2.0), SpriteLibrary.Items, model.getBlockItem(x, y).getTyp() - 1);
+                  Sprite itemNeu = new Sprite((x * multiplierZ + blockGap / 2.0) + (multiplierZ / 2.0), (y * multiplierS + blockGap / 2.0) + (multiplierS / 2.0), SpriteLibrary.Items, model.getBlockItem(x, y).getTyp() - 1);
                   allBlocks.add(itemNeu);
                }
             }
