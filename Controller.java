@@ -5,6 +5,8 @@ public class BallController extends Sprite {
    BlockView blockView;
    GameController spiel;
    static boolean itemActive = false;
+   boolean gestartet = false;
+
 
    public BallController(BallModel model, Schläger schläger, BlockModel blockModel, BlockView blockView, GameController spiel) {
       super(390, 500, SpriteLibrary.Sleepy_Blocks, 7);
@@ -14,7 +16,13 @@ public class BallController extends Sprite {
       this.blockModel = blockModel;
       this.blockView = blockView;
       this.spiel = spiel;
+
+    //ball mittig auf schläger
+      double ballX = schläger.getCenterX();
+      double ballY = schläger.getCenterY() - schläger.getHeight() / 2 - getHeight() / 2;
+      moveTo(ballX, ballY);
    }
+
 
    public void addEffect(int type) {
       BallController.itemActive = true;
@@ -57,10 +65,33 @@ public class BallController extends Sprite {
 
    public void act() {
       if(isDestroyed()) return;
+      
+      if (!gestartet) {
+        // Ball bleibt auf dem Schläger
+        double ballX = schläger.getCenterX();
+        double ballY = schläger.getCenterY() - schläger.getHeight() / 2 - getHeight() / 2;
+        moveTo(ballX, ballY);
+
+        // Starte Ball bei Tastendruck "a" oder "d"
+        if (isKeyDown("a") || isKeyDown("d")) {
+            gestartet = true;
+
+            // Zufällige Richtung nach oben
+            double winkelGrad = Math.random() * 50 + 20; // 20° bis 70°
+            if (Math.random() < 0.5) winkelGrad = 180 - winkelGrad; // nach links oder rechts
+
+            double winkelRad = Math.toRadians(winkelGrad);
+            double speed = model.v * 5 + 5;
+            model.vx = speed * Math.cos(winkelRad);
+            model.vy = -speed * Math.sin(winkelRad);
+        }
+
+        return; // solange nicht gestartet, keine weitere Bewegung
+    }
 
       lookAheadAndMove();
 
-      if(getCenterY() > 680 - getHeight() / 2) {
+      if(getCenterY() > 600 - getHeight() / 2) {
          destroy();
          return;
       }
@@ -107,7 +138,7 @@ public class BallController extends Sprite {
          model.v += 0.05;
          if(winkel > 0) Sound.playSound(Sound.pong_f);
          else Sound.playSound(Sound.pong_d);
-         println("relativeX: " + Math.round(relativeX) + ", winkel: " + Math.round(winkel));
+         // println("relativeX: " + Math.round(relativeX) + ", winkel: " + Math.round(winkel));
       }
 
       // PowerUp/BlockItem prüfen
@@ -118,7 +149,10 @@ public class BallController extends Sprite {
             int itemType = blockModel.getBlockItem(gridX, gridY).getTyp();
             blockModel.getBlockItem(gridX, gridY).zerstören();
             blockView.zeichneBlöcke();
-            addEffect(itemType);
+
+            FallendesItem item = new FallendesItem(getCenterX(), getCenterY(), itemType);
+            spiel.addItem(item);      // zur Liste im Controller hinzufügen
+
          }
       }
 
@@ -134,10 +168,21 @@ public class BallController extends Sprite {
       if(gridX >= 0 && gridX < blockModel.cols && gridY >= 0 && gridY < blockModel.rows) {
          if(blockModel.getBlockArt(gridX, gridY) != 0) {
             if(blockModel.getBlockArt(gridX, gridY) != 5) {
-               blockModel.zerstöreBlock(gridX, gridY);
+               blockModel.zerstöreBlock(gridX, gridY); 
+               Item blockItem = blockModel.getBlockItem(gridX, gridY);
+               if(blockItem.getTyp() != 0) {
+                  FallendesItem neuesItem = new FallendesItem(
+                     gridX * blockView.multiplierZ + blockView.multiplierZ / 2.0,
+                     gridY * blockView.multiplierS + blockView.multiplierS / 2.0,
+                     blockItem.getTyp()
+                     );
+                  spiel.addItem(neuesItem);
+                  blockModel.zerstöreItem(gridX, gridY); // Entferne das Item im Modell
+               }
+
                blockView.zeichneBlöcke();
             }
-            println("Noch vorhandene Blöcke: " + blockModel.zaehleBlöcke());
+            // println("Noch vorhandene Blöcke: " + blockModel.zaehleBlöcke());
             if(blockModel.sindAlleBlöckeZerstört()) {
                Text title = new Text(400, 200, 100, "You won!");
                title.setAlignment(Alignment.center);
